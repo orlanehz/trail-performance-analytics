@@ -1,0 +1,43 @@
+name: Daily Strava ingestion and features
+
+on:
+  schedule:
+    # This schedule runs the workflow every day at 06:10 UTC (approx. 07:10 Paris in winter, 08:10 in summer).
+    - cron: "10 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests psycopg[binary] python-dotenv pandas numpy
+
+      - name: Run Strava ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
+          STRAVA_PER_PAGE: "50"
+          STRAVA_AFTER_EPOCH_DEFAULT: "0"
+        run: |
+          python src/ingestion/ingest_strava_postgres.py
+
+      - name: Build features
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python src/features/build_features.py
