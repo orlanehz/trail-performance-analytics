@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.env
 .env/
 .env.*
 .venv.bak/
@@ -20,4 +21,3 @@ data/
 
 # OS
 .DS_Store
-.env
