@@ -49,10 +49,24 @@ Cette structure est indicative et peut être adaptée en fonction des besoins.  
    pip install -r requirements.txt
    ```
 
-4. **Lancer un notebook de démonstration** :
+4. **Configurer les secrets (optionnel)** :
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Puis renseignez les variables dans `.env`. Le fichier `.env` est ignoré par Git.
+
+5. **Lancer un notebook de démonstration** :
 
    ```bash
    jupyter notebook notebooks/exploration.ipynb
+   ```
+
+6. **Lancer l'application Streamlit** :
+
+   ```bash
+   streamlit run streamlit_app/app.py
    ```
 
 ## Sources de données
@@ -84,6 +98,19 @@ Le dépôt peut inclure une application Streamlit (`streamlit_app/`) qui permet�
 - de générer et télécharger un rapport personnalisé.
 
 Une version de démonstration peut être déployée gratuitement sur [Streamlit Cloud](https://streamlit.io/cloud) ou [Render.com](https://render.com), avec un lien dans le README principal.
+
+## Configuration des secrets
+
+Les secrets sont chargés via des variables d’environnement. Un exemple est disponible dans `.env.example`.
+
+Variables proposées :
+
+- `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` : identifiants OAuth Strava.
+- `GARMIN_API_KEY` : clé API Garmin (si applicable).
+- `APP_SECRET_KEY` : clé interne pour signatures ou sessions.
+- `DATA_DIR` : répertoire de données par défaut (valeur par défaut : `data`).
+
+Les variables sont lues dans `src/config.py` et peuvent être utilisées par les scripts ou l’application Streamlit.
 
 ## Contribution
 
