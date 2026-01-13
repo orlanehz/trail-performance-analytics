@@ -1,5 +1,6 @@
 import os
 import psycopg
+from dotenv import load_dotenv
 
 def must_env(name: str) -> str:
     v = os.getenv(name)
@@ -126,6 +127,8 @@ on conflict (activity_id) do update set
 """
 
 def main():
+    load_dotenv()
+
     db_url = must_env("DATABASE_URL")
     with psycopg.connect(db_url) as conn:
         conn.execute("set timezone to 'UTC';")
