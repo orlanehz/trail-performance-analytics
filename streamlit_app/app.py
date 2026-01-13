@@ -261,14 +261,36 @@ curl -X POST https://www.strava.com/oauth/token \\
     )
 
 
+def render_about_page():
+    st.title("A propos")
+    st.caption("Architecture et principes de securite")
+
+    st.markdown(
+        """
+### A propos (Architecture)
+- **Strava OAuth** → recuperation des activites avec consentement
+- **PostgreSQL (Supabase)** → stockage et historisation
+- **Features SQL** → charge 7j/28j via fenetres glissantes
+- **Modele ML** → Random Forest avec split temporel
+- **Automatisation** → ingestion quotidienne via GitHub Actions
+- **UI** → Streamlit pour connexion et dashboards
+
+#### Secrets
+Les secrets sont geres via GitHub/Streamlit Secrets et ne sont jamais stockes dans le repo.
+"""
+    )
+
+
 settings = get_settings()
 
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Pages", ["Analyse & Prediction", "Connexion Strava"])
+page = st.sidebar.radio("Pages", ["Analyse & Prediction", "Connexion Strava", "A propos"])
 
 df = load_dataset(DATA_PATH)
 
 if page == "Analyse & Prediction":
     render_analysis_page(df)
-else:
+elif page == "Connexion Strava":
     render_strava_page(settings)
+else:
+    render_about_page()
