@@ -1,13 +1,22 @@
 import os
 import psycopg
 from dotenv import load_dotenv
+from pathlib import Path
+
+"""
+This script builds or refreshes the `activity_features` table from raw `activities` data.
+"""
 
 def must_env(name: str) -> str:
+    """
+    Retrieve an environment variable or raise an error if not set.
+    """
     v = os.getenv(name)
     if not v:
         raise RuntimeError(f"Missing env var: {name}")
     return v
 
+# Rolling windows are computed in SQL for consistency and speed.
 FEATURE_SQL = """
 with base as (
   select
@@ -127,7 +136,9 @@ on conflict (activity_id) do update set
 """
 
 def main():
-    load_dotenv()
+    root = Path(__file__).resolve().parents[2]
+    load_dotenv(root / ".env")
+    load_dotenv(root / ".env.local")
 
     db_url = must_env("DATABASE_URL")
     with psycopg.connect(db_url) as conn:

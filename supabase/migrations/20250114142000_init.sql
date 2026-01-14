@@ -126,3 +126,29 @@ create table if not exists model_predictions (
   constraint uniq_prediction
     unique (athlete_id, activity_id, prediction_type, model_version)
 );
+
+create table if not exists app_users (
+  id bigserial primary key,
+  provider text not null,
+  provider_user_id text not null,
+  email text,
+  name text,
+  raw jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  constraint uniq_app_user unique (provider, provider_user_id)
+);
+
+create table if not exists oauth_tokens (
+  id bigserial primary key,
+  user_id bigint not null references app_users(id) on delete cascade,
+  provider text not null,
+  access_token text not null,
+  refresh_token text,
+  expires_at bigint,
+  scope text,
+  raw jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  constraint uniq_oauth_token unique (user_id, provider)
+);
