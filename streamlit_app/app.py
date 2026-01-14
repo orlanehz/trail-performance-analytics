@@ -18,7 +18,6 @@ from src.config import get_settings
 
 st.set_page_config(page_title="Trail Performance Analytics", layout="wide")
 
-DATA_PATH = ROOT / "notebooks" / "data" / "processed" / "dataset_model.parquet"
 TARGET = "pace_s_per_km"
 MODEL_NAME = "random_forest"
 MODEL_VERSION = "v1"
@@ -56,13 +55,6 @@ def load_dataset_from_db(database_url: str) -> pd.DataFrame:
     query = "select * from activity_features order by start_date"
     with psycopg.connect(database_url) as conn:
         return pd.read_sql_query(query, conn)
-
-
-@st.cache_data
-def load_dataset_from_parquet(path: Path) -> pd.DataFrame | None:
-    if not path.exists():
-        return None
-    return pd.read_parquet(path)
 
 
 @st.cache_resource
@@ -211,7 +203,7 @@ def render_analysis_page(df: pd.DataFrame | None):
     st.caption("Analyse et prediction de l'allure a partir des donnees Strava")
 
     if df is None:
-        st.info("Aucun dataset trouve. Ajoute `notebooks/data/processed/dataset_model.parquet`.")
+        st.info("Aucun dataset trouve. Configure `DATABASE_URL` et verifie la table `activity_features`.")
         return
 
     st.subheader("Resume du dataset")
@@ -395,23 +387,14 @@ page = st.sidebar.radio("Pages", ["Analyse & Prediction", "Connexion Strava", "A
 
 database_url = get_database_url()
 df = None
-source_label = None
 if database_url:
     try:
         df = load_dataset_from_db(database_url)
         df = prepare_features(df)
-        source_label = "Base de donnees"
     except Exception as exc:
         st.sidebar.warning(f"Erreur DB: {exc}")
 
-if df is None:
-    df = load_dataset_from_parquet(DATA_PATH)
-    if df is not None:
-        source_label = "Parquet local"
-
 if page == "Analyse & Prediction":
-    if source_label:
-        st.sidebar.caption(f"Source: {source_label}")
     render_analysis_page(df)
 elif page == "Connexion Strava":
     render_strava_page(settings)
