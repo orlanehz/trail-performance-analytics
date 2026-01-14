@@ -33,12 +33,16 @@ FEATURES = [
 
 # Admin / Coach mode
 
-def is_admin_enabled() -> bool:
-    try:
-        return bool(st.secrets.get("ADMIN_PASSWORD"))
-    except Exception:
+def is_admin_enabled(email: str | None) -> bool:
+    if not email:
         return False
 
+    try:
+        raw = st.secrets.get("ADMIN_EMAILS", "")
+        allowed = {e.strip().lower() for e in str(raw).split(",") if e.strip()}
+        return email.strip().lower() in allowed
+    except Exception:
+        return False
 
 def require_admin() -> None:
     if not st.session_state.get("is_admin", False):
@@ -56,7 +60,7 @@ def require_strava_connected(db, user_id):
     token = db.get_oauth_token(user_id=user_id, provider="strava")
     if not token:
         st.warning("Connecte Strava pour accéder à tes analyses.")
-        st.page_link("pages/02_Connecter_Strava.py", label="➡️ Connecter Strava")
+        st.page_link("pages/5_Connexion_Strava.py", label="➡️ Connecter Strava")
         st.stop()
 
 
@@ -159,13 +163,141 @@ def has_oauth_token(database_url: str, user_id: int, provider: str) -> bool:
 
 def render_profile_badge() -> None:
     if not getattr(st, "user", None) or not st.user.is_logged_in:
-        st.info("Profil non connecte")
+        st.info("Profil non connecté")
         return
 
     name = getattr(st.user, "name", None)
     email = getattr(st.user, "email", None)
-    label = name or email or "Utilisateur connecte"
-    st.success(f"Profil connecte : {label}")
+    label = name or email or "Utilisateur connecté"
+    st.success(f"Profil connecté : {label}")
+
+
+def render_sidebar(app_user_id: int, strava_connected: bool) -> None:
+    with st.sidebar:
+        email = getattr(st.user, "email", None)
+
+        st.caption(f"👤 {email or 'Utilisateur'}")
+        st.caption(f"🏃‍♂️ Strava : {'Connecté' if strava_connected else 'Non connecté'}")
+
+        st.page_link("app.py", label="🏡 Accueil")
+        st.page_link("pages/1_Dashboard.py", label="📈 Tableau de bord")
+        st.page_link("pages/2_Analyse.py", label="🧪 Analyse des performances")
+        st.page_link("pages/3_Predictions.py", label="🔮 Prédictions")
+        st.page_link("pages/4_Parametres.py", label="⚙️ Paramètres")
+
+        if not strava_connected:
+            st.page_link("pages/5_Connexion_Strava.py", label="🔌 Connecter Strava")
+
+        # 🔐 Admin — affiché uniquement pour les emails autorisés
+        if is_admin_enabled(email):
+            st.page_link("pages/9_Admin.py", label="🛠 Administration")
+
+        st.divider()
+
+        def do_logout():
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+            st.logout()
+
+        st.button("🚪 Se déconnecter", on_click=do_logout)
+
+
+def get_last_activity_date(database_url: str) -> str | None:
+    import psycopg
+
+    with psycopg.connect(database_url) as conn:
+        row = conn.execute(
+            "select max(start_date) from activity_features",
+        ).fetchone()
+    if not row or row[0] is None:
+        return None
+    return str(row[0].date())
+
+
+def get_dashboard_kpis(database_url: str) -> dict[str, float | int | None]:
+    import psycopg
+
+    query = """
+        select
+          count(*) as activities,
+          sum(case when start_date >= now() - interval '28 days' then distance_m else 0 end) as dist_28d_m,
+          sum(case when start_date >= now() - interval '28 days' then elevation_gain_m else 0 end) as elev_28d_m,
+          avg(pace_s_per_km) as pace_avg
+        from activity_features
+    """
+    with psycopg.connect(database_url) as conn:
+        row = conn.execute(query).fetchone()
+    if not row:
+        return {"activities": 0, "dist_28d_m": 0.0, "elev_28d_m": 0.0, "pace_avg": None}
+    return {
+        "activities": int(row[0] or 0),
+        "dist_28d_m": float(row[1] or 0.0),
+        "elev_28d_m": float(row[2] or 0.0),
+        "pace_avg": float(row[3]) if row[3] is not None else None,
+    }
+
+
+def get_prediction_history(database_url: str, user_id: int) -> pd.DataFrame:
+    import psycopg
+
+    query = """
+        select created_at, prediction_type, predicted_pace_s_per_km, predicted_time_s, features
+        from model_predictions
+        where user_id = %s
+        order by created_at desc
+        limit 200
+    """
+    with psycopg.connect(database_url) as conn:
+        return pd.read_sql_query(query, conn, params=(user_id,))
+
+
+def get_db_health(database_url: str) -> bool:
+    import psycopg
+
+    try:
+        with psycopg.connect(database_url) as conn:
+            conn.execute("select 1")
+        return True
+    except Exception:
+        return False
+
+
+def get_strava_token_status(database_url: str, user_id: int) -> dict[str, Any]:
+    import psycopg
+    import time
+
+    with psycopg.connect(database_url) as conn:
+        row = conn.execute(
+            "select expires_at from oauth_tokens where user_id = %s and provider = 'strava' limit 1",
+            (user_id,),
+        ).fetchone()
+
+    if not row:
+        return {"status": "missing", "expires_at": None}
+
+    expires_at = row[0]
+    if expires_at and int(expires_at) < int(time.time()):
+        return {"status": "expired", "expires_at": int(expires_at)}
+
+    return {"status": "ok", "expires_at": int(expires_at) if expires_at else None}
+
+
+def get_last_ingestion_status(database_url: str) -> str | None:
+    import psycopg
+
+    with psycopg.connect(database_url) as conn:
+        row = conn.execute(
+            """
+            select updated_at
+            from ingestion_state
+            where source = 'strava' and key = 'last_after_epoch'
+            order by updated_at desc
+            limit 1
+            """
+        ).fetchone()
+    if not row or row[0] is None:
+        return None
+    return str(row[0])
 
 
 @st.cache_data(ttl=600)
@@ -246,6 +378,7 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def save_prediction(
     database_url: str,
+    user_id: int | None,
     athlete_id: int,
     activity_id: int | None,
     prediction_type: str,
@@ -261,13 +394,14 @@ def save_prediction(
             conn.execute(
                 """
                 insert into model_predictions (
-                  athlete_id, activity_id, prediction_type,
+                  user_id, athlete_id, activity_id, prediction_type,
                   predicted_pace_s_per_km, predicted_time_s,
                   model_name, model_version, features
                 )
-                values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                 """,
                 (
+                    user_id,
                     athlete_id,
                     None,
                     prediction_type,
@@ -282,12 +416,12 @@ def save_prediction(
             conn.execute(
                 """
                 insert into model_predictions (
-                  athlete_id, activity_id, prediction_type,
+                  user_id, athlete_id, activity_id, prediction_type,
                   predicted_pace_s_per_km, predicted_time_s,
                   model_name, model_version, features
                 )
-                values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-                on conflict (athlete_id, activity_id, prediction_type, model_version)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                on conflict (user_id, athlete_id, activity_id, prediction_type, model_version)
                 do update set
                   predicted_pace_s_per_km = excluded.predicted_pace_s_per_km,
                   predicted_time_s = excluded.predicted_time_s,
@@ -296,6 +430,7 @@ def save_prediction(
                   created_at = now()
                 """,
                 (
+                    user_id,
                     athlete_id,
                     activity_id,
                     prediction_type,

@@ -8,51 +8,41 @@ from shared import (
     get_database_url,
     get_secret,
     ensure_app_user,
-    require_google_login,
     render_profile_badge,
+    render_sidebar,
+    require_google_login,
     upsert_oauth_token,
 )
 
-
 st.title("Connecter Strava")
-st.caption("Autoriser l'accès à vos activités Strava (OAuth)")
+st.caption("Autoriser l'acces a vos activites")
 render_profile_badge()
 
-# 1) Google login first (identity)
-st.subheader("1. Connexion Google")
-st.markdown(
-    """
-Nous utilisons Google pour identifier l'utilisateur, puis Strava pour les données sportives.
-Si vous n'etes pas connecte(e), cliquez sur **Se connecter avec Google**.
-"""
-)
 require_google_login()
-st.success("Google connecte ✅")
-st.divider()
+app_user_id = ensure_app_user()
 
-# 2) Load Strava secrets
+database_url = get_database_url()
+render_sidebar(app_user_id, False)
+
 client_id = get_secret("STRAVA_CLIENT_ID")
 client_secret = get_secret("STRAVA_CLIENT_SECRET")
 redirect_uri = get_secret("STRAVA_REDIRECT_URI")
-database_url = get_database_url()
 
-st.info(
-    "Vous êtes connecté(e) via Google en tant que : "
-    f"**{getattr(st.user, 'email', 'email inconnu')}**"
-)
-
-st.subheader("2. Connexion Strava")
+st.subheader("Etapes")
 st.markdown(
     """
-1. Cliquez sur **Autoriser Strava**
-2. Acceptez les permissions
-3. Vous serez redirigé(e) ici avec un paramètre `code`
-4. Cliquez sur **Finaliser la connexion** pour enregistrer le token Strava
+- Cliquez sur **Autoriser Strava**
+- Acceptez les permissions
+- Vous revenez ici avec un `code`
 """
 )
 
 if not client_id or not client_secret or not redirect_uri:
     st.warning("Configure STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET et STRAVA_REDIRECT_URI.")
+    st.stop()
+
+if not database_url:
+    st.warning("DATABASE_URL manquant. Ajoute-le dans les secrets.")
     st.stop()
 
 # Build Strava authorize URL
@@ -67,7 +57,6 @@ auth_url = (
 
 st.link_button("Autoriser Strava", auth_url)
 
-# Read OAuth callback params
 params = st.query_params
 code = params.get("code")
 error = params.get("error")
@@ -77,21 +66,12 @@ if isinstance(error, list):
     error = error[0] if error else None
 
 if error:
-    st.error(f"Erreur OAuth Strava: {error}")
+    st.error("Ton autorisation a ete annulee. Reessaye.")
     st.stop()
 
-# If we got a code, allow the user to finalize
 if code:
-    st.success("Code reçu. Vous pouvez finaliser la connexion Strava.")
-
-    if st.button("Finaliser la connexion"):
-        if not database_url:
-            st.error("DATABASE_URL manquant. Ajoute-le dans les secrets.")
-            st.stop()
-
-        app_user_id = ensure_app_user()
-
-        # --- Exchange the Strava code for tokens ---
+    st.success("Ok, on finalise.")
+    if st.button("Finaliser"):
         token_data = exchange_strava_code(code, client_id, client_secret)
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
@@ -99,14 +79,12 @@ if code:
         scope = token_data.get("scope")
 
         if not access_token:
-            st.error("Échec de l'échange de code Strava.")
+            st.error("Echec de l'echange de code Strava.")
             st.stop()
 
-        # Optional: fetch athlete profile for traceability/debug
         athlete = fetch_strava_athlete(access_token)
         athlete_id = athlete.get("id")
 
-        # --- Store Strava tokens linked to the Google app_user ---
         upsert_oauth_token(
             database_url=database_url,
             user_id=app_user_id,
@@ -122,7 +100,11 @@ if code:
             },
         )
 
-        st.success("✅ Strava connecté ! Vos tokens sont associés à votre compte Google.")
-        st.switch_page("pages/1_Analyse.py")
+        st.success("✅ Strava connecte")
+        col1, col2 = st.columns(2)
+        if col1.button("Retour a l'accueil"):
+            st.switch_page("app.py")
+        if col2.button("Aller au Dashboard"):
+            st.switch_page("pages/1_Dashboard.py")
 else:
-    st.info("Après l'autorisation Strava, vous reviendrez ici avec un paramètre `code`.")
+    st.info("Apres l'autorisation Strava, vous reviendrez ici avec un `code`.")

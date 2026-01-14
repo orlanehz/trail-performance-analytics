@@ -112,21 +112,6 @@ create table if not exists activity_features (
 create index if not exists idx_activity_features_athlete_startdate
   on activity_features (athlete_id, start_date desc);
 
-create table if not exists model_predictions (
-  id bigserial primary key,
-  athlete_id bigint not null,
-  activity_id bigint,
-  prediction_type text not null,
-  predicted_pace_s_per_km double precision,
-  predicted_time_s double precision,
-  model_name text not null,
-  model_version text not null,
-  features jsonb,
-  created_at timestamptz default now(),
-  constraint uniq_prediction
-    unique (athlete_id, activity_id, prediction_type, model_version)
-);
-
 create table if not exists app_users (
   id bigserial primary key,
   provider text not null,
@@ -151,4 +136,20 @@ create table if not exists oauth_tokens (
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   constraint uniq_oauth_token unique (user_id, provider)
+);
+
+create table if not exists model_predictions (
+  id bigserial primary key,
+  user_id bigint references app_users(id) on delete cascade,
+  athlete_id bigint not null,
+  activity_id bigint,
+  prediction_type text not null,
+  predicted_pace_s_per_km double precision,
+  predicted_time_s double precision,
+  model_name text not null,
+  model_version text not null,
+  features jsonb,
+  created_at timestamptz default now(),
+  constraint uniq_prediction
+    unique (user_id, athlete_id, activity_id, prediction_type, model_version)
 );

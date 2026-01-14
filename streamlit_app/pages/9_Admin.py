@@ -6,43 +6,40 @@ import plotly.express as px
 import streamlit as st
 
 from shared import (
+    ensure_app_user,
+    get_database_url,
+    get_strava_token_status,
+    render_profile_badge,
+    render_sidebar,
+    require_google_login,
     format_seconds,
     get_database_url,
-    is_admin_enabled,
     load_dataset_from_db,
     prepare_features,
     render_profile_badge,
-    require_admin,
+    render_sidebar,
+    is_admin_enabled
 )
 
 
-def render_admin_login() -> None:
-    if not is_admin_enabled():
-        st.warning("Le mode admin n'est pas active. Ajoute `ADMIN_PASSWORD` dans les secrets.")
-        return
-
-    if st.session_state.get("is_admin", False):
-        st.success("Connecte (admin)")
-        if st.button("Se deconnecter"):
-            st.session_state["is_admin"] = False
-            st.rerun()
-        return
-
-    pwd = st.text_input("Mot de passe admin", type="password")
-    if st.button("Se connecter"):
-        if pwd == st.secrets.get("ADMIN_PASSWORD"):
-            st.session_state["is_admin"] = True
-            st.rerun()
-        else:
-            st.error("Mot de passe incorrect")
-
-
-st.title("Admin — Comparer deux athletes")
-st.caption("Acces reserve : comparaison de volumes, charge et allure")
+st.title("Admin — Comparer deux athlètes")
+st.caption("Accès réservé (admin) : comparaison de volumes, charge et allure")
 render_profile_badge()
 
-render_admin_login()
-require_admin()
+require_google_login()
+app_user_id = ensure_app_user()
+
+render_profile_badge()
+
+database_url = get_database_url()
+strava_status = get_strava_token_status(database_url, app_user_id) if database_url else {"status": "missing"}
+
+render_sidebar(app_user_id, strava_status.get("status") == "ok")
+
+email = getattr(st.user, "email", None)
+if not is_admin_enabled(email):
+    st.warning("Accès réservé (admin).")
+    st.stop()
 
 database_url = get_database_url()
 if not database_url:
