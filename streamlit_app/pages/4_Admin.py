@@ -5,7 +5,15 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from shared import format_seconds, get_database_url, is_admin_enabled, load_dataset_from_db, prepare_features, require_admin
+from shared import (
+    format_seconds,
+    get_database_url,
+    is_admin_enabled,
+    load_dataset_from_db,
+    prepare_features,
+    render_profile_badge,
+    require_admin,
+)
 
 
 def render_admin_login() -> None:
@@ -31,6 +39,7 @@ def render_admin_login() -> None:
 
 st.title("Admin — Comparer deux athletes")
 st.caption("Acces reserve : comparaison de volumes, charge et allure")
+render_profile_badge()
 
 render_admin_login()
 require_admin()

@@ -133,6 +133,41 @@ def get_secret(name: str) -> str | None:
     return os.getenv(name)
 
 
+def get_user_summary(database_url: str, user_id: int) -> dict[str, Any] | None:
+    import psycopg
+
+    with psycopg.connect(database_url) as conn:
+        row = conn.execute(
+            "select id, email, name from app_users where id = %s",
+            (user_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {"id": int(row[0]), "email": row[1], "name": row[2]}
+
+
+def has_oauth_token(database_url: str, user_id: int, provider: str) -> bool:
+    import psycopg
+
+    with psycopg.connect(database_url) as conn:
+        row = conn.execute(
+            "select 1 from oauth_tokens where user_id = %s and provider = %s limit 1",
+            (user_id, provider),
+        ).fetchone()
+    return row is not None
+
+
+def render_profile_badge() -> None:
+    if not getattr(st, "user", None) or not st.user.is_logged_in:
+        st.info("Profil non connecte")
+        return
+
+    name = getattr(st.user, "name", None)
+    email = getattr(st.user, "email", None)
+    label = name or email or "Utilisateur connecte"
+    st.success(f"Profil connecte : {label}")
+
+
 @st.cache_data(ttl=600)
 def load_dataset_from_db(database_url: str) -> pd.DataFrame:
     import psycopg

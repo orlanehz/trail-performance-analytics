@@ -9,9 +9,11 @@ from shared import (
     ensure_app_user,
     format_seconds,
     get_database_url,
+    has_oauth_token,
     load_dataset_from_db,
     prepare_features,
     require_google_login,
+    render_profile_badge,
     save_prediction,
     train_model,
 )
@@ -22,9 +24,21 @@ def _load_prepared_dataset(database_url: str) -> pd.DataFrame:
     df = prepare_features(df)
     return df
 
-def render_page(df: pd.DataFrame | None, database_url: str | None, app_user_id: int) -> None:
+def render_page(
+    df: pd.DataFrame | None,
+    database_url: str | None,
+    app_user_id: int,
+    strava_connected: bool,
+) -> None:
+    render_profile_badge()
+
     st.title("Analyse")
     st.caption("Analyse et prédiction d'allure à partir des données Strava")
+
+    if not strava_connected:
+        st.warning("Strava n'est pas connecté. Connecte Strava pour accéder aux analyses.")
+        st.page_link("streamlit_app/pages/2_Connexion_Strava.py", label="➡️ Connecter Strava")
+        return
 
     # --- Sidebar UX ---
     with st.sidebar:
@@ -249,11 +263,13 @@ app_user_id = ensure_app_user()
 
 database_url = get_database_url()
 df: pd.DataFrame | None = None
+strava_connected = False
 
 if database_url:
     try:
+        strava_connected = has_oauth_token(database_url, app_user_id, "strava")
         df = _load_prepared_dataset(database_url)
     except Exception as exc:
         st.sidebar.warning(f"Erreur DB: {exc}")
 
-render_page(df, database_url, app_user_id)
+render_page(df, database_url, app_user_id, strava_connected)

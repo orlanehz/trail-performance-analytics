@@ -9,15 +9,26 @@ from shared import (
     get_secret,
     ensure_app_user,
     require_google_login,
+    render_profile_badge,
     upsert_oauth_token,
 )
 
 
 st.title("Connecter Strava")
 st.caption("Autoriser l'accès à vos activités Strava (OAuth)")
+render_profile_badge()
 
-# 1) Require Google login first (user identity)
+# 1) Google login first (identity)
+st.subheader("1. Connexion Google")
+st.markdown(
+    """
+Nous utilisons Google pour identifier l'utilisateur, puis Strava pour les données sportives.
+Si vous n'etes pas connecte(e), cliquez sur **Se connecter avec Google**.
+"""
+)
 require_google_login()
+st.success("Google connecte ✅")
+st.divider()
 
 # 2) Load Strava secrets
 client_id = get_secret("STRAVA_CLIENT_ID")
@@ -30,7 +41,7 @@ st.info(
     f"**{getattr(st.user, 'email', 'email inconnu')}**"
 )
 
-st.subheader("Étapes")
+st.subheader("2. Connexion Strava")
 st.markdown(
     """
 1. Cliquez sur **Autoriser Strava**
@@ -112,6 +123,6 @@ if code:
         )
 
         st.success("✅ Strava connecté ! Vos tokens sont associés à votre compte Google.")
-        st.caption("Vous pouvez maintenant revenir aux pages d'analyse.")
+        st.switch_page("pages/1_Analyse.py")
 else:
     st.info("Après l'autorisation Strava, vous reviendrez ici avec un paramètre `code`.")
