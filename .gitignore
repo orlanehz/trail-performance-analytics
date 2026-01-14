@@ -21,3 +21,5 @@ data/
 
 # OS
 .DS_Store
+
+.streamlit/secrets.toml
