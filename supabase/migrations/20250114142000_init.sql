@@ -1,5 +1,5 @@
 -- =========================
--- Trail Performance Analytics - DDL (Postgres)
+-- Trail Performance Analytics - Initial schema (Supabase/Postgres)
 -- =========================
 
 create table if not exists athletes (

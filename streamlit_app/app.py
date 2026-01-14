@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 import sys
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -18,6 +20,8 @@ st.set_page_config(page_title="Trail Performance Analytics", layout="wide")
 
 DATA_PATH = ROOT / "notebooks" / "data" / "processed" / "dataset_model.parquet"
 TARGET = "pace_s_per_km"
+MODEL_NAME = "random_forest"
+MODEL_VERSION = "v1"
 FEATURES = [
     "distance_m",
     "elevation_gain_m",
@@ -36,8 +40,26 @@ FEATURES = [
 ]
 
 
+def get_database_url() -> str | None:
+    try:
+        if "DATABASE_URL" in st.secrets:
+            return st.secrets["DATABASE_URL"]
+    except Exception:
+        pass
+    return os.getenv("DATABASE_URL")
+
+
 @st.cache_data
-def load_dataset(path: Path) -> pd.DataFrame | None:
+def load_dataset_from_db(database_url: str) -> pd.DataFrame:
+    import psycopg
+
+    query = "select * from activity_features order by start_date"
+    with psycopg.connect(database_url) as conn:
+        return pd.read_sql_query(query, conn)
+
+
+@st.cache_data
+def load_dataset_from_parquet(path: Path) -> pd.DataFrame | None:
     if not path.exists():
         return None
     return pd.read_parquet(path)
@@ -81,6 +103,67 @@ def format_seconds(seconds: float) -> str:
     if hours:
         return f"{hours:d}:{minutes:02d}:{secs:02d}"
     return f"{minutes:d}:{secs:02d}"
+
+
+def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    distance_m = df["distance_m"].replace(0, np.nan)
+    elev_gain = df["elevation_gain_m"].replace(0, np.nan)
+
+    df["elev_density_m_per_m"] = df["elevation_gain_m"] / distance_m
+    df["elev_density_m_per_km"] = df["elev_density_m_per_m"] * 1000.0
+
+    df["charge_ratio_dist_7_28"] = df["dist_7d_m"] / df["dist_28d_m"].replace(0, np.nan)
+    df["charge_ratio_elev_7_28"] = df["elev_7d_m"] / df["elev_28d_m"].replace(0, np.nan)
+    df["charge_ratio_time_7_28"] = df["time_7d_s"] / df["time_28d_s"].replace(0, np.nan)
+
+    df["log_distance_m"] = np.log(distance_m.fillna(0) + 1.0)
+    df["log_elev_gain_m"] = np.log(elev_gain.fillna(0) + 1.0)
+
+    return df
+
+
+def save_prediction(
+    database_url: str,
+    athlete_id: int,
+    activity_id: int | None,
+    prediction_type: str,
+    predicted_pace_s_per_km: float,
+    predicted_time_s: float,
+    features: dict,
+):
+    import json
+    import psycopg
+
+    with psycopg.connect(database_url) as conn:
+        conn.execute(
+            """
+            insert into model_predictions (
+              athlete_id, activity_id, prediction_type,
+              predicted_pace_s_per_km, predicted_time_s,
+              model_name, model_version, features
+            )
+            values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            on conflict (athlete_id, activity_id, prediction_type, model_version)
+            do update set
+              predicted_pace_s_per_km = excluded.predicted_pace_s_per_km,
+              predicted_time_s = excluded.predicted_time_s,
+              model_name = excluded.model_name,
+              features = excluded.features,
+              created_at = now()
+            """,
+            (
+                athlete_id,
+                activity_id,
+                prediction_type,
+                predicted_pace_s_per_km,
+                predicted_time_s,
+                MODEL_NAME,
+                MODEL_VERSION,
+                json.dumps(features),
+            ),
+        )
+        conn.commit()
 
 
 def build_features(
@@ -174,6 +257,16 @@ def render_analysis_page(df: pd.DataFrame | None):
         )
 
     with st.form("prediction_form"):
+        athlete_id = None
+        if "athlete_id" in df.columns and df["athlete_id"].notna().any():
+            athlete_ids = sorted(df["athlete_id"].dropna().unique().tolist())
+            athlete_id = st.selectbox("Athlete", athlete_ids)
+        else:
+            athlete_id = st.number_input("Athlete ID", min_value=0, value=0, step=1)
+
+        activity_id = st.number_input(
+            "Activity ID (optionnel)", min_value=0, value=0, step=1
+        )
         col1, col2 = st.columns(2)
         distance_km = col1.number_input("Distance de la course (km)", min_value=0.1, value=10.0)
         elevation_gain_m = col2.number_input("D+ de la course (m)", min_value=0.0, value=300.0)
@@ -193,7 +286,7 @@ def render_analysis_page(df: pd.DataFrame | None):
         submitted = st.form_submit_button("Predire")
 
     if submitted:
-        features = build_features(
+        features_df = build_features(
             distance_km=distance_km,
             elevation_gain_m=elevation_gain_m,
             dist_7d_km=dist_7d_km,
@@ -203,7 +296,7 @@ def render_analysis_page(df: pd.DataFrame | None):
             elev_28d_m=elev_28d_m,
             time_28d_h=time_28d_h,
         )
-        pred_pace = float(model.predict(features)[0])
+        pred_pace = float(model.predict(features_df)[0])
         pred_time = pred_pace * distance_km
 
         st.success(
@@ -211,6 +304,20 @@ def render_analysis_page(df: pd.DataFrame | None):
             f"(~{pred_pace:.0f} s/km)"
         )
         st.info(f"Temps estime: {format_seconds(pred_time)} pour {distance_km:.1f} km")
+
+        if database_url:
+            save_now = st.button("Sauvegarder la prediction")
+            if save_now:
+                save_prediction(
+                    database_url=database_url,
+                    athlete_id=int(athlete_id),
+                    activity_id=int(activity_id) if activity_id else None,
+                    prediction_type="race_time",
+                    predicted_pace_s_per_km=pred_pace,
+                    predicted_time_s=pred_time,
+                    features=features_df.iloc[0].to_dict(),
+                )
+                st.success("Prediction sauvegardee dans la base.")
 
 
 def render_strava_page(settings):
@@ -286,9 +393,25 @@ settings = get_settings()
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Pages", ["Analyse & Prediction", "Connexion Strava", "A propos"])
 
-df = load_dataset(DATA_PATH)
+database_url = get_database_url()
+df = None
+source_label = None
+if database_url:
+    try:
+        df = load_dataset_from_db(database_url)
+        df = prepare_features(df)
+        source_label = "Base de donnees"
+    except Exception as exc:
+        st.sidebar.warning(f"Erreur DB: {exc}")
+
+if df is None:
+    df = load_dataset_from_parquet(DATA_PATH)
+    if df is not None:
+        source_label = "Parquet local"
 
 if page == "Analyse & Prediction":
+    if source_label:
+        st.sidebar.caption(f"Source: {source_label}")
     render_analysis_page(df)
 elif page == "Connexion Strava":
     render_strava_page(settings)
