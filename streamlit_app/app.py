@@ -128,33 +128,55 @@ def save_prediction(
     import psycopg
 
     with psycopg.connect(database_url) as conn:
-        conn.execute(
-            """
-            insert into model_predictions (
-              athlete_id, activity_id, prediction_type,
-              predicted_pace_s_per_km, predicted_time_s,
-              model_name, model_version, features
+        if activity_id is None:
+            conn.execute(
+                """
+                insert into model_predictions (
+                  athlete_id, activity_id, prediction_type,
+                  predicted_pace_s_per_km, predicted_time_s,
+                  model_name, model_version, features
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    athlete_id,
+                    None,
+                    prediction_type,
+                    predicted_pace_s_per_km,
+                    predicted_time_s,
+                    MODEL_NAME,
+                    MODEL_VERSION,
+                    json.dumps(features),
+                ),
             )
-            values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            on conflict (athlete_id, activity_id, prediction_type, model_version)
-            do update set
-              predicted_pace_s_per_km = excluded.predicted_pace_s_per_km,
-              predicted_time_s = excluded.predicted_time_s,
-              model_name = excluded.model_name,
-              features = excluded.features,
-              created_at = now()
-            """,
-            (
-                athlete_id,
-                activity_id,
-                prediction_type,
-                predicted_pace_s_per_km,
-                predicted_time_s,
-                MODEL_NAME,
-                MODEL_VERSION,
-                json.dumps(features),
-            ),
-        )
+        else:
+            conn.execute(
+                """
+                insert into model_predictions (
+                  athlete_id, activity_id, prediction_type,
+                  predicted_pace_s_per_km, predicted_time_s,
+                  model_name, model_version, features
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                on conflict (athlete_id, activity_id, prediction_type, model_version)
+                do update set
+                  predicted_pace_s_per_km = excluded.predicted_pace_s_per_km,
+                  predicted_time_s = excluded.predicted_time_s,
+                  model_name = excluded.model_name,
+                  features = excluded.features,
+                  created_at = now()
+                """,
+                (
+                    athlete_id,
+                    activity_id,
+                    prediction_type,
+                    predicted_pace_s_per_km,
+                    predicted_time_s,
+                    MODEL_NAME,
+                    MODEL_VERSION,
+                    json.dumps(features),
+                ),
+            )
         conn.commit()
 
 
@@ -291,25 +313,37 @@ def render_analysis_page(df: pd.DataFrame | None):
         pred_pace = float(model.predict(features_df)[0])
         pred_time = pred_pace * distance_km
 
+        st.session_state["last_prediction"] = {
+            "athlete_id": int(athlete_id),
+            "activity_id": int(activity_id) if activity_id else None,
+            "prediction_type": "race_time",
+            "predicted_pace_s_per_km": float(pred_pace),
+            "predicted_time_s": float(pred_time),
+            "features": features_df.iloc[0].to_dict(),
+        }
+
         st.success(
             f"Allure estimee: {format_seconds(pred_pace)} min/km "
             f"(~{pred_pace:.0f} s/km)"
         )
         st.info(f"Temps estime: {format_seconds(pred_time)} pour {distance_km:.1f} km")
 
-        if database_url:
-            save_now = st.button("Sauvegarder la prediction")
-            if save_now:
-                save_prediction(
-                    database_url=database_url,
-                    athlete_id=int(athlete_id),
-                    activity_id=int(activity_id) if activity_id else None,
-                    prediction_type="race_time",
-                    predicted_pace_s_per_km=pred_pace,
-                    predicted_time_s=pred_time,
-                    features=features_df.iloc[0].to_dict(),
-                )
-                st.success("Prediction sauvegardee dans la base.")
+    if database_url and "last_prediction" in st.session_state:
+        st.divider()
+        st.subheader("Sauvegarder la prédiction")
+        st.caption("Enregistre la dernière prédiction calculée dans la table `model_predictions`.")
+        if st.button("💾 Sauvegarder la dernière prédiction"):
+            p = st.session_state["last_prediction"]
+            save_prediction(
+                database_url=database_url,
+                athlete_id=p["athlete_id"],
+                activity_id=p["activity_id"],
+                prediction_type=p["prediction_type"],
+                predicted_pace_s_per_km=p["predicted_pace_s_per_km"],
+                predicted_time_s=p["predicted_time_s"],
+                features=p["features"],
+            )
+            st.success("✅ Prédiction sauvegardée dans la base.")
 
 
 def render_strava_page(settings):
@@ -319,28 +353,22 @@ def render_strava_page(settings):
     st.subheader("Etapes")
     st.markdown(
         """
-1. Creez une application Strava sur https://www.strava.com/settings/api
-2. Definissez un `Authorization Callback Domain` (ex: `localhost`)
-3. Renseignez `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` et `STRAVA_REDIRECT_URI` dans `.env`
-4. Cliquez sur le lien d'autorisation ci-dessous pour donner votre consentement
+1. Ouvrez le lien d'autorisation Strava ci-dessous
+2. Acceptez les permissions demandees par Strava
+3. Apres validation, vous serez redirige vers `http://localhost/exchange_token` avec un parametre `code`
+4. Echangez ce `code` contre un jeton d'acces et un refresh token
 """
     )
 
-    client_id = settings.strava_client_id
-    redirect_uri = settings.strava_redirect_uri
-
-    if client_id and redirect_uri:
-        auth_url = (
-            "https://www.strava.com/oauth/authorize"
-            f"?client_id={client_id}"
-            "&response_type=code"
-            f"&redirect_uri={redirect_uri}"
-            "&scope=read,activity:read_all"
-            "&approval_prompt=auto"
-        )
-        st.link_button("Autoriser Strava", auth_url)
-    else:
-        st.warning("Complete `STRAVA_CLIENT_ID` et `STRAVA_REDIRECT_URI` pour generer le lien.")
+    auth_url = (
+        "https://www.strava.com/oauth/authorize"
+        "?client_id=195335"
+        "&response_type=code"
+        "&redirect_uri=http://localhost/exchange_token"
+        "&approval_prompt=force"
+        "&scope=read,activity:read_all"
+    )
+    st.link_button("Autoriser Strava", auth_url)
 
     st.subheader("Recuperer le code")
     st.markdown(
@@ -351,11 +379,12 @@ Ce code doit etre echange contre un `access_token` (serveur ou script local).
 Exemple (a adapter) :
 ```
 curl -X POST https://www.strava.com/oauth/token \\
-  -d client_id=YOUR_ID \\
+  -d client_id=195335 \\
   -d client_secret=YOUR_SECRET \\
   -d code=AUTH_CODE \\
   -d grant_type=authorization_code
 ```
+Ensuite, conservez le `refresh_token` retourne et renseignez-le dans `STRAVA_REFRESH_TOKEN`.
 """
     )
 
