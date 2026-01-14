@@ -7,18 +7,10 @@ from shared import (
     fetch_strava_athlete,
     get_database_url,
     get_secret,
-    upsert_app_user,
+    ensure_app_user,
+    require_google_login,
     upsert_oauth_token,
 )
-
-
-def require_google_login() -> None:
-    """Gate the page behind Streamlit's built-in authentication (Google via OIDC)."""
-    if not getattr(st, "user", None) or not st.user.is_logged_in:
-        st.title("Connexion")
-        st.caption("Connecte-toi avec Google pour accéder à l'application.")
-        st.button("Se connecter avec Google", on_click=st.login)
-        st.stop()
 
 
 st.title("Connecter Strava")
@@ -86,30 +78,7 @@ if code:
             st.error("DATABASE_URL manquant. Ajoute-le dans les secrets.")
             st.stop()
 
-        # --- Ensure we have an app_user tied to the Google identity ---
-        google_email = getattr(st.user, "email", None)
-        google_name = getattr(st.user, "name", None)
-        google_user_id = getattr(st.user, "id", None) or google_email
-
-        if not google_user_id:
-            st.error(
-                "Impossible d'identifier l'utilisateur Google (id/email manquant). "
-                "Vérifie la configuration OIDC et les scopes."
-            )
-            st.stop()
-
-        app_user_id = upsert_app_user(
-            database_url=database_url,
-            provider="google",
-            provider_user_id=str(google_user_id),
-            email=google_email,
-            name=google_name,
-            raw={
-                "email": google_email,
-                "name": google_name,
-                "id": google_user_id,
-            },
-        )
+        app_user_id = ensure_app_user()
 
         # --- Exchange the Strava code for tokens ---
         token_data = exchange_strava_code(code, client_id, client_secret)

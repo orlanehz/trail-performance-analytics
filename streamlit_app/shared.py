@@ -45,6 +45,75 @@ def require_admin() -> None:
         st.warning("Acces reserve (mode coach/admin).")
         st.stop()
 
+def require_google_login() -> None:
+    if not getattr(st, "user", None) or not st.user.is_logged_in:
+        st.title("Connexion")
+        st.write("Connecte-toi pour accéder à l’application.")
+        st.button("Se connecter avec Google", on_click=st.login)
+        st.stop()
+
+def require_strava_connected(db, user_id):
+    token = db.get_oauth_token(user_id=user_id, provider="strava")
+    if not token:
+        st.warning("Connecte Strava pour accéder à tes analyses.")
+        st.page_link("pages/02_Connecter_Strava.py", label="➡️ Connecter Strava")
+        st.stop()
+
+
+# --- Google user identity helpers ---
+
+def get_google_identity() -> dict[str, str | None]:
+    """Return best-effort identity fields from Streamlit OIDC user."""
+    email = getattr(st.user, "email", None)
+    name = getattr(st.user, "name", None)
+    user_id = getattr(st.user, "id", None) or email
+    return {
+        "provider_user_id": str(user_id) if user_id is not None else None,
+        "email": email,
+        "name": name,
+    }
+
+
+def ensure_app_user() -> int:
+    """Ensure the logged-in Google user exists in `app_users` and return `app_users.id`.
+
+    This is the canonical way to 'load users into app_users': on first login we upsert.
+    The resulting `app_user_id` is cached in `st.session_state`.
+    """
+    require_google_login()
+
+    if st.session_state.get("app_user_id"):
+        return int(st.session_state["app_user_id"])
+
+    database_url = get_database_url()
+    if not database_url:
+        st.error("DATABASE_URL manquant. Ajoute-le dans les secrets.")
+        st.stop()
+
+    ident = get_google_identity()
+    provider_user_id = ident.get("provider_user_id")
+    if not provider_user_id:
+        st.error(
+            "Impossible d'identifier l'utilisateur Google (id/email manquant). "
+            "Vérifie la configuration OIDC et les scopes."
+        )
+        st.stop()
+
+    app_user_id = upsert_app_user(
+        database_url=database_url,
+        provider="google",
+        provider_user_id=provider_user_id,
+        email=ident.get("email"),
+        name=ident.get("name"),
+        raw={
+            "email": ident.get("email"),
+            "name": ident.get("name"),
+            "id": provider_user_id,
+        },
+    )
+
+    st.session_state["app_user_id"] = int(app_user_id)
+    return int(app_user_id)
 
 def get_database_url() -> str | None:
     try:
