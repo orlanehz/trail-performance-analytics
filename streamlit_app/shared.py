@@ -237,9 +237,17 @@ def get_dashboard_kpis(database_url: str) -> dict[str, float | int | None]:
     }
 
 
-def get_prediction_history(database_url: str, user_id: int) -> pd.DataFrame:
+def _query_to_df(database_url: str, query: str, params: tuple[Any, ...] | None = None) -> pd.DataFrame:
     import psycopg
 
+    with psycopg.connect(database_url) as conn:
+        result = conn.execute(query, params or ())
+        rows = result.fetchall()
+        columns = [col.name for col in (result.description or ())]
+    return pd.DataFrame(rows, columns=columns)
+
+
+def get_prediction_history(database_url: str, user_id: int) -> pd.DataFrame:
     query = """
         select created_at, prediction_type, predicted_pace_s_per_km, predicted_time_s, features
         from model_predictions
@@ -247,8 +255,7 @@ def get_prediction_history(database_url: str, user_id: int) -> pd.DataFrame:
         order by created_at desc
         limit 200
     """
-    with psycopg.connect(database_url) as conn:
-        return pd.read_sql_query(query, conn, params=(user_id,))
+    return _query_to_df(database_url, query, (user_id,))
 
 
 def get_db_health(database_url: str) -> bool:
@@ -302,8 +309,6 @@ def get_last_ingestion_status(database_url: str) -> str | None:
 
 @st.cache_data(ttl=600)
 def load_dataset_from_db(database_url: str) -> pd.DataFrame:
-    import psycopg
-
     query = """
         select
             activity_id, athlete_id, start_date, distance_m, elevation_gain_m, pace_s_per_km,
@@ -312,8 +317,7 @@ def load_dataset_from_db(database_url: str) -> pd.DataFrame:
         from activity_features
         order by start_date
     """
-    with psycopg.connect(database_url) as conn:
-        return pd.read_sql_query(query, conn)
+    return _query_to_df(database_url, query)
 
 
 @st.cache_resource
