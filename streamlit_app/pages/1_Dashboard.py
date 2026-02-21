@@ -81,7 +81,7 @@ if {"start_date", "pace_s_per_km"}.issubset(df.columns):
         title="Allure dans le temps",
         labels={"start_date": "Date", "pace_s_per_km": "Allure (sec/km)"},
     )
-    st.plotly_chart(fig_time, use_container_width=True)
+    st.plotly_chart(fig_time, width=True)
 
 if {"start_date", "distance_m"}.issubset(df.columns):
     df_week = df.copy()
@@ -94,7 +94,7 @@ if {"start_date", "distance_m"}.issubset(df.columns):
         title="Volume hebdo (m)",
         labels={"week": "Semaine", "distance_m": "Distance (m)"},
     )
-    st.plotly_chart(fig_volume, use_container_width=True)
+    st.plotly_chart(fig_volume, width=True)
 
 if "pace_s_per_km" in df.columns:
     fig_hist = px.histogram(
@@ -103,7 +103,7 @@ if "pace_s_per_km" in df.columns:
         nbins=20,
         title="Distribution de l'allure",
     )
-    st.plotly_chart(fig_hist, use_container_width=True)
+    st.plotly_chart(fig_hist, width=True)
 
 st.subheader("Insights")
 insights = []

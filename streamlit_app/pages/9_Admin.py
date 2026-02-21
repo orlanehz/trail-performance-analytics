@@ -126,20 +126,20 @@ p = pd.concat([pA, pB], ignore_index=True)
 if "start_date" in p.columns and "distance_m" in p.columns:
     st.plotly_chart(
         px.line(p, x="start_date", y="distance_m", color="athlete", title="Distance par sortie (m)"),
-        use_container_width=True,
+        width=True,
     )
 
 if "start_date" in p.columns and "elevation_gain_m" in p.columns:
     st.plotly_chart(
         px.line(p, x="start_date", y="elevation_gain_m", color="athlete", title="D+ par sortie (m)"),
-        use_container_width=True,
+        width=True,
     )
 
 if "start_date" in p.columns and "pace_s_per_km" in p.columns:
     st.plotly_chart(
         px.line(p, x="start_date", y="pace_s_per_km", color="athlete", title="Allure (sec/km)"),
-        use_container_width=True,
+        width=True,
     )
 
 st.subheader("Donnees (echantillon)")
-st.dataframe(p.sort_values("start_date", ascending=False).head(50), use_container_width=True)
+st.dataframe(p.sort_values("start_date", ascending=False).head(50), width=True)

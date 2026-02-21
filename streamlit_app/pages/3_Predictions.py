@@ -75,7 +75,7 @@ show_cols = [
     if c in df.columns
 ]
 
-st.dataframe(df[show_cols], use_container_width=True)
+st.dataframe(df[show_cols], width=True)
 
 st.subheader("Dupliquer une prediction")
 idx = st.number_input("Index a dupliquer", min_value=0, max_value=len(df) - 1, value=0)
