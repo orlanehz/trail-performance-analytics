@@ -38,10 +38,10 @@ if database_url:
 render_sidebar(app_user_id, strava_connected)
 
 st.title("Dashboard")
-st.caption("Vue synthese des performances")
+st.caption("Vue synthèse des performances")
 
 if not strava_connected:
-    st.warning("Strava n'est pas connecte. Connecte Strava pour acceder au dashboard.")
+    st.warning("Strava n'est pas connecté. Connecte Strava pour accéder au dashboard.")
     st.page_link("pages/5_Connexion_Strava.py", label="➡️ Connecter Strava")
     st.stop()
 
@@ -56,7 +56,7 @@ except Exception as exc:
     st.stop()
 
 if df is None or df.empty:
-    st.info("Aucune donnee disponible.")
+    st.info("Aucune donnée disponible.")
     st.stop()
 
 kpis = get_dashboard_kpis(database_url)
@@ -126,7 +126,7 @@ for item in insights[:3]:
 
 st.subheader("Actions")
 cols = st.columns(2)
-if cols[0].button("Faire une prediction"):
+if cols[0].button("Faire une prédiction"):
     st.switch_page("pages/2_Analyse.py")
 if cols[1].button("Ouvrir Analyse"):
     st.switch_page("pages/2_Analyse.py")

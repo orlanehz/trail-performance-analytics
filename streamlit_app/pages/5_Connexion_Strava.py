@@ -15,7 +15,7 @@ from shared import (
 )
 
 st.title("Connecter Strava")
-st.caption("Autoriser l'acces a vos activites")
+st.caption("Autoriser l'accès à vos activités")
 render_profile_badge()
 
 require_google_login()
@@ -28,7 +28,7 @@ client_id = get_secret("STRAVA_CLIENT_ID")
 client_secret = get_secret("STRAVA_CLIENT_SECRET")
 redirect_uri = get_secret("STRAVA_REDIRECT_URI")
 
-st.subheader("Etapes")
+st.subheader("Étapes")
 st.markdown(
     """
 - Cliquez sur **Autoriser Strava**
@@ -66,7 +66,7 @@ if isinstance(error, list):
     error = error[0] if error else None
 
 if error:
-    st.error("Ton autorisation a ete annulee. Reessaye.")
+    st.error("Ton autorisation a été annulée. Réessaie.")
     st.stop()
 
 if code:
@@ -79,7 +79,7 @@ if code:
         scope = token_data.get("scope")
 
         if not access_token:
-            st.error("Echec de l'echange de code Strava.")
+            st.error("Échec de l'échange de code Strava.")
             st.stop()
 
         athlete = fetch_strava_athlete(access_token)
@@ -100,11 +100,11 @@ if code:
             },
         )
 
-        st.success("✅ Strava connecte")
+        st.success("✅ Strava connecté")
         col1, col2 = st.columns(2)
-        if col1.button("Retour a l'accueil"):
+        if col1.button("Retour à l'accueil"):
             st.switch_page("app.py")
         if col2.button("Aller au Dashboard"):
             st.switch_page("pages/1_Dashboard.py")
 else:
-    st.info("Apres l'autorisation Strava, vous reviendrez ici avec un `code`.")
+    st.info("Après l'autorisation Strava, vous reviendrez ici avec un `code`.")

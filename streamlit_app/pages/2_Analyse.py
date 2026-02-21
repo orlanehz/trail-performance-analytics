@@ -139,8 +139,8 @@ def render_sidebar(app_user_id: int, strava_connected: bool) -> None:
     st.sidebar.title("Menu")
     st.sidebar.page_link("pages/1_Dashboard.py", label="🏠 Tableau de bord")
     st.sidebar.page_link("pages/2_Analyse.py", label="📊 Analyse")
-    st.sidebar.page_link("pages/3_Predictions.py", label="🧠 Predictions")
-    st.sidebar.page_link("pages/4_Parametres.py", label="⚙️ Parametres")
+    st.sidebar.page_link("pages/3_Predictions.py", label="🧠 Prédictions")
+    st.sidebar.page_link("pages/4_Parametres.py", label="⚙️ Paramètres")
 
     if not strava_connected:
         st.sidebar.page_link("pages/5_Connexion_Strava.py", label="🔗 Connexion Strava")
@@ -150,7 +150,7 @@ def render_sidebar(app_user_id: int, strava_connected: bool) -> None:
     if is_admin_user(email):
         st.sidebar.page_link("pages/9_Admin.py", label="🛠 Administration")
 
-    st.sidebar.button("Se deconnecter")
+    st.sidebar.button("Se déconnecter")
 
 
 def main() -> None:

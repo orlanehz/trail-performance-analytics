@@ -28,8 +28,8 @@ if database_url:
 
 render_sidebar(app_user_id, strava_connected)
 
-st.title("Predictions")
-st.caption("Historique des predictions sauvegardees")
+st.title("Prédictions")
+st.caption("Historique des prédictions sauvegardées")
 
 if not database_url:
     st.warning("DATABASE_URL manquant.")
@@ -42,7 +42,7 @@ except Exception as exc:
     st.stop()
 
 if df is None or df.empty:
-    st.info("Aucune prediction enregistree.")
+    st.info("Aucune prédiction enregistrée.")
     st.stop()
 
 # Expand features for display
@@ -77,11 +77,11 @@ show_cols = [
 
 st.dataframe(df[show_cols], width=True)
 
-st.subheader("Dupliquer une prediction")
-idx = st.number_input("Index a dupliquer", min_value=0, max_value=len(df) - 1, value=0)
+st.subheader("Dupliquer une prédiction")
+idx = st.number_input("Index à dupliquer", min_value=0, max_value=len(df) - 1, value=0)
 row = df.iloc[int(idx)]
 
-if st.button("Pre-remplir dans Analyse"):
+if st.button("Pré-remplir dans Analyse"):
     st.session_state["prefill_prediction"] = {
         "distance_km": float(row.get("distance_m") or 0) / 1000.0,
         "elevation_gain_m": float(row.get("elevation_gain_m") or 0),

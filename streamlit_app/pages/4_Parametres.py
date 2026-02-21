@@ -22,7 +22,7 @@ strava_status = get_strava_token_status(database_url, app_user_id) if database_u
 
 render_sidebar(app_user_id, strava_status.get("status") == "ok")
 
-st.title("Parametres")
+st.title("Paramètres")
 st.caption("Compte et connexions")
 
 st.subheader("Compte Google")
@@ -33,14 +33,14 @@ st.write(f"**Email :** {email or '—'}")
 
 st.subheader("Strava")
 if strava_status.get("status") == "ok":
-    st.success("Strava connecte")
+    st.success("Strava connecté")
 elif strava_status.get("status") == "expired":
     st.warning("Token Strava expire")
 else:
-    st.info("Strava non connecte")
+    st.info("Strava non connecté")
 
 if st.button("Reconnecter Strava"):
     st.switch_page("pages/5_Connexion_Strava.py")
 
 st.subheader("Session")
-st.button("Se deconnecter", on_click=st.logout)
+st.button("Se déconnecter", on_click=st.logout)
