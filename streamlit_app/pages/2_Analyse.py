@@ -14,7 +14,13 @@ import pandas as pd
 import plotly.express as px
 import requests
 import streamlit as st
-from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+
+try:
+    # Streamlit >= 1.41
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+except ImportError:
+    # Older Streamlit fallback
+    from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
 
 _logger = logging.getLogger(__name__)
 
@@ -131,7 +137,7 @@ def render_profile_badge() -> None:
 
 def render_sidebar(app_user_id: int, strava_connected: bool) -> None:
     st.sidebar.title("Menu")
-    st.sidebar.page_link("pages/0_Dashboard.py", label="🏠 Tableau de bord")
+    st.sidebar.page_link("pages/1_Dashboard.py", label="🏠 Tableau de bord")
     st.sidebar.page_link("pages/2_Analyse.py", label="📊 Analyse")
     st.sidebar.page_link("pages/3_Predictions.py", label="🧠 Predictions")
     st.sidebar.page_link("pages/4_Parametres.py", label="⚙️ Parametres")
@@ -145,3 +151,19 @@ def render_sidebar(app_user_id: int, strava_connected: bool) -> None:
         st.sidebar.page_link("pages/9_Admin.py", label="🛠 Administration")
 
     st.sidebar.button("Se deconnecter")
+
+
+def main() -> None:
+    app_user_id = ensure_app_user()
+    database_url = get_database_url()
+    strava_connected = bool(database_url) and has_oauth_token(database_url, app_user_id, "strava")
+
+    render_sidebar(app_user_id=app_user_id, strava_connected=strava_connected)
+    render_profile_badge()
+
+    st.title("Analyse")
+    st.caption("Page d'analyse en cours de construction.")
+    st.info("La page est maintenant active. Les visualisations seront ajoutées ici.")
+
+
+main()
